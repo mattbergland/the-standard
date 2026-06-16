@@ -42,8 +42,11 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Install XcodeGen + xcparse + xcbeautify
-        run: brew install xcodegen xcparse xcbeautify
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Install xcparse
+        run: brew install chargepoint/xcparse/xcparse
 
       - name: Generate Xcode project
         run: xcodegen generate

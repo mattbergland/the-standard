@@ -41,7 +41,7 @@ struct ResultsView: View {
                     CardBody(text: pack.teamText)
                 }
 
-                CultureCardView(icon: "rectangle.portrait.on.rectangle.portrait.fill",
+                CultureCardView(icon: "doc.text.fill",
                                 title: "Locker Room Card") {
                     Text(pack.lockerRoomCard)
                         .font(.callout.weight(.semibold))
