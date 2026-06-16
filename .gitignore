@@ -1,0 +1,19 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# XcodeGen-generated artifacts
+*.xcodeproj
+App/Generated/
+
+# Xcode / build
+DerivedData/
+*.xcresult
+build/
+
+# Screenshots/videos produced locally by CI extraction (committed copies live in docs/)
+/ci-artifacts/
+
+# macOS
+.DS_Store
