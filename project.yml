@@ -1,0 +1,79 @@
+name: TheStandard
+options:
+  bundleIdPrefix: land.mattberg.thestandard
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  StandardCore:
+    path: .
+
+targets:
+  TheStandard:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+    dependencies:
+      - package: StandardCore
+        product: StandardCore
+    info:
+      path: App/Generated/Info.plist
+      properties:
+        CFBundleDisplayName: The Standard
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: land.mattberg.thestandard
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+
+  TheStandardUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests/Sources
+    dependencies:
+      - target: TheStandard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: land.mattberg.thestandard.uitests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+
+schemes:
+  TheStandard:
+    build:
+      targets:
+        TheStandard: all
+        TheStandardUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TheStandardUITests
+      gatherCoverageData: false

@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Core engine: compiles and unit-tests the Swift Package on Linux.
+  # No network, no API key required.
+  # ---------------------------------------------------------------------------
+  linux-core:
+    name: Linux · swift build & test
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: swift build
+        run: swift build
+
+      - name: swift test
+        run: swift test
+
+  # ---------------------------------------------------------------------------
+  # iOS app: generates the Xcode project, builds for an iOS Simulator, runs the
+  # XCUITest target with the offline MockProvider, and captures screenshots of
+  # the input + populated results screens.
+  # ---------------------------------------------------------------------------
+  ios-simulator:
+    name: iOS · simulator build, UI tests & screenshots
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen + xcbeautify
+        run: brew install xcodegen xcbeautify
+
+      - name: Install xcparse
+        run: brew install chargepoint/xcparse/xcparse || brew install xcparse
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)
+          best=None
+          for rt,devs in d["devices"].items():
+              if "iOS" not in rt: continue
+              for dev in devs:
+                  if dev.get("isAvailable") and dev["name"].startswith("iPhone"):
+                      best=dev["udid"]
+                      print(dev["name"], dev["udid"], file=sys.stderr)
+                      break
+              if best: break
+          print(best)
+          ')
+          echo "Selected simulator UDID: $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b || true
+
+      - name: Start screen recording (best effort)
+        run: |
+          ( xcrun simctl io "${{ steps.sim.outputs.udid }}" recordVideo --codec h264 --force /tmp/the-standard-demo.mp4 & echo $! > /tmp/rec.pid ) || true
+
+      - name: Build & run UI tests (MockProvider, offline)
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project TheStandard.xcodeproj \
+            -scheme TheStandard \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Stop screen recording (best effort)
+        if: always()
+        run: |
+          if [ -f /tmp/rec.pid ]; then kill -INT "$(cat /tmp/rec.pid)" || true; sleep 3; fi
+
+      - name: Extract screenshots from result bundle
+        if: always()
+        run: |
+          set -euo pipefail
+          xcparse screenshots --help || true
+          RAW=ci-artifacts/raw
+          OUT=docs/screenshots
+          mkdir -p "$RAW" "$OUT"
+
+          # `--test` pulls XCTAttachment images. `--device` is NOT supported by
+          # xcparse 2.x, so we never pass it.
+          xcparse screenshots --test TestResults.xcresult "$RAW" \
+            || xcparse screenshots TestResults.xcresult "$RAW"
+
+          echo "Raw extracted files:"
+          find "$RAW" -type f -iname '*.png' | sort
+
+          # Normalize hashed filenames to the stable names the README embeds,
+          # matching by the XCTAttachment name.
+          for name in 01-input-screen 02-results-top 03-results-middle 04-results-bottom; do
+            match=$(find "$RAW" -type f -iname "*${name}*.png" | sort | head -1 || true)
+            if [ -n "${match:-}" ]; then
+              cp "$match" "$OUT/${name}.png"
+              echo "Normalized $match -> $OUT/${name}.png"
+            fi
+          done
+
+          # Sorted-order fallback: if name matching missed everything, take the
+          # extracted PNGs in order.
+          if [ -z "$(ls -A "$OUT" 2>/dev/null)" ]; then
+            i=1
+            while IFS= read -r f; do
+              printf -v idx '%02d' "$i"
+              cp "$f" "$OUT/${idx}-screenshot.png"
+              i=$((i + 1))
+            done < <(find "$RAW" -type f -iname '*.png' | sort)
+          fi
+
+          cp -f /tmp/the-standard-demo.mp4 "$OUT/demo.mp4" 2>/dev/null || true
+
+          echo "Committed screenshot candidates:"
+          ls -la "$OUT"
+
+          # Assert the required screenshots were actually produced (no silent pass).
+          test -f "$OUT/01-input-screen.png"
+          test -f "$OUT/02-results-top.png"
+
+      - name: Upload screenshots + video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-screenshots
+          path: docs/screenshots/
+
+      - name: Upload result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-bundle
+          path: TestResults.xcresult
